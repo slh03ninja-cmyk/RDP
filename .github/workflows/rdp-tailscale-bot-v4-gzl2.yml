@@ -571,10 +571,11 @@ jobs:
           $exitCode = $LASTEXITCODE
           Remove-Item "$botDir\test_mt5.py" -Force
           if ($exitCode -ne 0) {
-            Write-Error "\u274c MT5 ne se connecte pas \u2014 v\u00e9rifiez login/password/server"
-            exit 1
+            Write-Warning "\u26a0\ufe0f MT5 pas encore connect\u00e9 \u2014 le bot va r\u00e9essayer avec son propre retry"
+            Write-Host "Continuation du workflow..."
+          } else {
+            Write-Host "\u2705 Connexion MT5 v\u00e9rifi\u00e9e avec succ\u00e8s"
           }
-          Write-Host "\u2705 Connexion MT5 v\u00e9rifi\u00e9e avec succ\u00e8s"
 
       # ── Setup TradingBot V4 ──
       - name: Setup TradingBot V4
