@@ -458,6 +458,9 @@ jobs:
           Server=$env:MT5_SERVER
           AutoConfiguration=true
           EULAAccepted=true
+          [Experts]
+          AllowAlgoTrading=1
+          Enabled=1
           "@
           $commonIni | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
           Write-Host "common.ini cr\u00e9\u00e9 \u2705"

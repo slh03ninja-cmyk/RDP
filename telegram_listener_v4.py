@@ -623,9 +623,13 @@ class MT5Bridge:
         except Exception:
             algo_ok = True
         if not algo_ok:
-            log.warning("Vérifiez que 'Algo Trading' est VERT dans MT5")
+            log.error(
+                "❌ ALGO TRADING DÉSACTIVÉ !\n"
+                "  → Cliquez sur le bouton 'Algo Trading' en haut de MT5 (vert)\n"
+                "  → Ou vérifiez common.ini : [Experts] AllowAlgoTrading=1"
+            )
         else:
-            log.info("Algo Trading actif")
+            log.info("Algo Trading actif ✅")
         return True
 
     def disconnect(self):
