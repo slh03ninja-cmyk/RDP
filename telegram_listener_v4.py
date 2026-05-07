@@ -618,18 +618,26 @@ class MT5Bridge:
 
     def _check_algo(self) -> bool:
         terminal = mt5.terminal_info()
-        try:
-            algo_ok = bool(getattr(terminal, "trade_expert", True))
-        except Exception:
-            algo_ok = True
+        # Vérifier les deux flags
+        algo_ok = bool(getattr(terminal, "trade_expert", False))
+        trade_ok = bool(getattr(terminal, "trade_allowed", False))
+
+        log.info(f"[MT5] terminal.trade_expert={algo_ok} | terminal.trade_allowed={trade_ok}")
+
         if not algo_ok:
             log.error(
                 "❌ ALGO TRADING DÉSACTIVÉ !\n"
-                "  → Cliquez sur le bouton 'Algo Trading' en haut de MT5 (vert)\n"
-                "  → Ou vérifiez common.ini : [Experts] AllowAlgoTrading=1"
+                "  → Outils → Options → Conseillers Experts → 'Autoriser le trading automatisé'\n"
+                "  → Ou cliquez sur le bouton 'Algo Trading' en haut de MT5 (vert)\n"
+                "  → Ou ajoutez [Experts] AllowAlgoTrading=1 dans common.ini"
+            )
+        elif not trade_ok:
+            log.error(
+                "❌ TRADING NON AUTORISÉ !\n"
+                "  → Le compte ou le terminal bloque le trading"
             )
         else:
-            log.info("Algo Trading actif ✅")
+            log.info("Algo Trading actif ✅ | Trading autorisé ✅")
         return True
 
     def disconnect(self):
