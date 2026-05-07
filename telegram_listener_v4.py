@@ -567,7 +567,7 @@ class MT5Bridge:
 
     _sym_cache: dict = {}
 
-    def connect(self, max_retries: int = 5, retry_delay: float = 10.0) -> bool:
+    def connect(self, max_retries: int = 10, retry_delay: float = 15.0) -> bool:
         """Connexion MT5 avec retry — gère le démarrage tardif du terminal."""
         for attempt in range(1, max_retries + 1):
             log.info(f"[MT5] Tentative de connexion {attempt}/{max_retries}...")
@@ -581,7 +581,14 @@ class MT5Bridge:
                             f"MT5 déjà connecté → {info.name} | "
                             f"Balance: {info.balance} {info.currency}"
                         )
-                        return self._check_algo()
+                        # Vérifier Algo Trading AVANT de continuer
+                        if not self._check_algo():
+                            if attempt < max_retries:
+                                log.info(f"[MT5] Algo Trading pas encore activé — retry dans {retry_delay}s...")
+                                mt5.shutdown()
+                                time.sleep(retry_delay)
+                                continue
+                        return True
                     else:
                         log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
             except Exception as e:
@@ -600,7 +607,13 @@ class MT5Bridge:
                             f"MT5 connecté → {info.name} | "
                             f"Balance: {info.balance} {info.currency}"
                         )
-                        return self._check_algo()
+                        if not self._check_algo():
+                            if attempt < max_retries:
+                                log.info(f"[MT5] Algo Trading pas encore activé — retry dans {retry_delay}s...")
+                                mt5.shutdown()
+                                time.sleep(retry_delay)
+                                continue
+                        return True
                     else:
                         log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
                 else:
@@ -631,14 +644,16 @@ class MT5Bridge:
                 "  → Ou cliquez sur le bouton 'Algo Trading' en haut de MT5 (vert)\n"
                 "  → Ou ajoutez [Experts] AllowAlgoTrading=1 dans common.ini"
             )
+            return False
         elif not trade_ok:
             log.error(
                 "❌ TRADING NON AUTORISÉ !\n"
                 "  → Le compte ou le terminal bloque le trading"
             )
+            return False
         else:
             log.info("Algo Trading actif ✅ | Trading autorisé ✅")
-        return True
+            return True
 
     def disconnect(self):
         mt5.shutdown()

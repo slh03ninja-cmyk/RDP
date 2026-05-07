@@ -821,7 +821,8 @@ AllowDllImport=1
             Write-Host "Demarrage de MT5 avec auto-login..."
             $mt5Dir = Split-Path $mt5Exe
             Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
-            Start-Sleep -Seconds 20
+            Write-Host "MT5 demarre — attente 60s pour chargement complet + activation Algo Trading..."
+            Start-Sleep -Seconds 60
             Write-Host "MT5 demarre"
           } else {
             Write-Host "MT5 deja en cours d'execution"
