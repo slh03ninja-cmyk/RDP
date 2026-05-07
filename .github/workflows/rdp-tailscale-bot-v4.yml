@@ -164,8 +164,8 @@ jobs:
       max-parallel: 10
     timeout-minutes: 370
     env:
-      RDP_USER: Bullettemporary
-      RDP_PASS: Bullet@12345
+      RDP_USER: Gzl
+      RDP_PASS: Gzl@12345
 
     steps:
       # ── CRD Flag ──
@@ -566,7 +566,7 @@ jobs:
           Write-Host " TRADINGBOT V4 — PRÊT"
           Write-Host "========================================"
           Write-Host " IP RDP     : $env:TAILSCALE_IP"
-          Write-Host " User RDP   : Bullettemporary"
+          Write-Host " User RDP   : Gzl"
           Write-Host " Canaux     : $env:TG_CHANNELS"
           if ($env:TG_REPORT_CHANNEL) { Write-Host " Rapport    : $env:TG_REPORT_CHANNEL" }
           Write-Host " MT5        : $env:MT5_SERVER"
