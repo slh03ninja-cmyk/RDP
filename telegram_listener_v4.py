@@ -567,29 +567,54 @@ class MT5Bridge:
 
     _sym_cache: dict = {}
 
-    def connect(self) -> bool:
-        if mt5.initialize():
-            info = mt5.account_info()
-            if info and info.login > 0:
-                log.info(
-                    f"MT5 déjà connecté → {info.name} | "
-                    f"Balance: {info.balance} {info.currency}"
-                )
-                return self._check_algo()
-        mt5.shutdown()
+    def connect(self, max_retries: int = 5, retry_delay: float = 10.0) -> bool:
+        """Connexion MT5 avec retry — gère le démarrage tardif du terminal."""
+        for attempt in range(1, max_retries + 1):
+            log.info(f"[MT5] Tentative de connexion {attempt}/{max_retries}...")
 
-        if not mt5.initialize(
-            login=MT5_LOGIN, password=MT5_PASSWORD, server=MT5_SERVER
-        ):
-            log.error(f"MT5 initialize failed: {mt5.last_error()}")
-            return False
+            # Essai 1: déjà connecté ?
+            try:
+                if mt5.initialize():
+                    info = mt5.account_info()
+                    if info and info.login > 0:
+                        log.info(
+                            f"MT5 déjà connecté → {info.name} | "
+                            f"Balance: {info.balance} {info.currency}"
+                        )
+                        return self._check_algo()
+                    else:
+                        log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
+            except Exception as e:
+                log.warning(f"[MT5] Exception initialize() attempt {attempt}: {e}")
 
-        info = mt5.account_info()
-        log.info(
-            f"MT5 connecté → {info.name} | "
-            f"Balance: {info.balance} {info.currency}"
-        )
-        return self._check_algo()
+            mt5.shutdown()
+
+            # Essai 2: connexion avec credentials
+            try:
+                if mt5.initialize(
+                    login=MT5_LOGIN, password=MT5_PASSWORD, server=MT5_SERVER
+                ):
+                    info = mt5.account_info()
+                    if info and info.login > 0:
+                        log.info(
+                            f"MT5 connecté → {info.name} | "
+                            f"Balance: {info.balance} {info.currency}"
+                        )
+                        return self._check_algo()
+                    else:
+                        log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
+                else:
+                    err = mt5.last_error()
+                    log.warning(f"[MT5] Échec connexion attempt {attempt}: {err}")
+            except Exception as e:
+                log.warning(f"[MT5] Exception initialize(login=...) attempt {attempt}: {e}")
+
+            if attempt < max_retries:
+                log.info(f"[MT5] Retry dans {retry_delay}s...")
+                time.sleep(retry_delay)
+
+        log.error(f"[MT5] ÉCHEC après {max_retries} tentatives — vérifiez login/password/server")
+        return False
 
     def _check_algo(self) -> bool:
         terminal = mt5.terminal_info()
