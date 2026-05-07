@@ -458,51 +458,9 @@ jobs:
           Server=$env:MT5_SERVER
           AutoConfiguration=true
           EULAAccepted=true
-          [Experts]
-          AllowAlgoTrading=1
-          Enabled=1
-          AllowDllImport=1
-          [Terminal]
-          AllowAlgoTrading=1
           "@
           $commonIni | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
           Write-Host "common.ini cr\u00e9\u00e9 \u2705"
-
-          # 3b) Cr\u00e9er terminal.ini dans le r\u00e9pertoire de donn\u00e9es MT5
-          # Le r\u00e9pertoire de donn\u00e9es est g\u00e9n\u00e9ralement dans %APPDATA%\MetaQuotes\Terminal\
-          $mt5DataDir = "$env:APPDATA\MetaQuotes\Terminal"
-          if (Test-Path $mt5DataDir) {
-            $termDirs = Get-ChildItem $mt5DataDir -Directory -EA SilentlyContinue
-            foreach ($td in $termDirs) {
-              $termIni = Join-Path $td.FullName "terminal.ini"
-              $termContent = @"
-[Common]
-AllowAlgoTrading=1
-[Experts]
-AllowAlgoTrading=1
-Enabled=1
-AllowDllImport=1
-"@
-              $termContent | Set-Content -Path $termIni -Encoding UTF8
-              Write-Host "terminal.ini \u00e9crit dans $($td.FullName) \u2705"
-            }
-          } else {
-            Write-Host "R\u00e9pertoire MetaQuotes non trouv\u00e9 \u2014 cr\u00e9ation..."
-            New-Item -ItemType Directory -Path $mt5DataDir -Force | Out-Null
-          }
-
-          # 3c) Aussi \u00e9crire terminal.ini dans le r\u00e9pertoire d'installation
-          $termIniLocal = "$mt5Dir\terminal.ini"
-          $termContentLocal = @"
-[Common]
-AllowAlgoTrading=1
-[Experts]
-AllowAlgoTrading=1
-Enabled=1
-AllowDllImport=1
-"@
-          $termContentLocal | Set-Content -Path $termIniLocal -Encoding UTF8
-          Write-Host "terminal.ini local cr\u00e9\u00e9 \u2705"
 
           # 4) Raccourci Bureau
           $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
