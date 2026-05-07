@@ -567,93 +567,41 @@ class MT5Bridge:
 
     _sym_cache: dict = {}
 
-    def connect(self, max_retries: int = 10, retry_delay: float = 15.0) -> bool:
-        """Connexion MT5 avec retry — gère le démarrage tardif du terminal."""
-        for attempt in range(1, max_retries + 1):
-            log.info(f"[MT5] Tentative de connexion {attempt}/{max_retries}...")
+    def connect(self) -> bool:
+        if mt5.initialize():
+            info = mt5.account_info()
+            if info and info.login > 0:
+                log.info(
+                    f"MT5 déjà connecté → {info.name} | "
+                    f"Balance: {info.balance} {info.currency}"
+                )
+                return self._check_algo()
+        mt5.shutdown()
 
-            # Essai 1: déjà connecté ?
-            try:
-                if mt5.initialize():
-                    info = mt5.account_info()
-                    if info and info.login > 0:
-                        log.info(
-                            f"MT5 déjà connecté → {info.name} | "
-                            f"Balance: {info.balance} {info.currency}"
-                        )
-                        # Vérifier Algo Trading AVANT de continuer
-                        if not self._check_algo():
-                            if attempt < max_retries:
-                                log.info(f"[MT5] Algo Trading pas encore activé — retry dans {retry_delay}s...")
-                                mt5.shutdown()
-                                time.sleep(retry_delay)
-                                continue
-                        return True
-                    else:
-                        log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
-            except Exception as e:
-                log.warning(f"[MT5] Exception initialize() attempt {attempt}: {e}")
+        if not mt5.initialize(
+            login=MT5_LOGIN, password=MT5_PASSWORD, server=MT5_SERVER
+        ):
+            log.error(f"MT5 initialize failed: {mt5.last_error()}")
+            return False
 
-            mt5.shutdown()
-
-            # Essai 2: connexion avec credentials
-            try:
-                if mt5.initialize(
-                    login=MT5_LOGIN, password=MT5_PASSWORD, server=MT5_SERVER
-                ):
-                    info = mt5.account_info()
-                    if info and info.login > 0:
-                        log.info(
-                            f"MT5 connecté → {info.name} | "
-                            f"Balance: {info.balance} {info.currency}"
-                        )
-                        if not self._check_algo():
-                            if attempt < max_retries:
-                                log.info(f"[MT5] Algo Trading pas encore activé — retry dans {retry_delay}s...")
-                                mt5.shutdown()
-                                time.sleep(retry_delay)
-                                continue
-                        return True
-                    else:
-                        log.warning(f"[MT5] Connecté mais pas de compte (attempt {attempt})")
-                else:
-                    err = mt5.last_error()
-                    log.warning(f"[MT5] Échec connexion attempt {attempt}: {err}")
-            except Exception as e:
-                log.warning(f"[MT5] Exception initialize(login=...) attempt {attempt}: {e}")
-
-            if attempt < max_retries:
-                log.info(f"[MT5] Retry dans {retry_delay}s...")
-                time.sleep(retry_delay)
-
-        log.error(f"[MT5] ÉCHEC après {max_retries} tentatives — vérifiez login/password/server")
-        return False
+        info = mt5.account_info()
+        log.info(
+            f"MT5 connecté → {info.name} | "
+            f"Balance: {info.balance} {info.currency}"
+        )
+        return self._check_algo()
 
     def _check_algo(self) -> bool:
         terminal = mt5.terminal_info()
-        # Vérifier les deux flags
-        algo_ok = bool(getattr(terminal, "trade_expert", False))
-        trade_ok = bool(getattr(terminal, "trade_allowed", False))
-
-        log.info(f"[MT5] terminal.trade_expert={algo_ok} | terminal.trade_allowed={trade_ok}")
-
+        try:
+            algo_ok = bool(getattr(terminal, "trade_expert", True))
+        except Exception:
+            algo_ok = True
         if not algo_ok:
-            log.error(
-                "❌ ALGO TRADING DÉSACTIVÉ !\n"
-                "  → Outils → Options → Conseillers Experts → 'Autoriser le trading automatisé'\n"
-                "  → Ou cliquez sur le bouton 'Algo Trading' en haut de MT5 (vert)\n"
-                "  → Ou ajoutez [Experts] AllowAlgoTrading=1 dans common.ini"
-            )
-            return False
-        elif not trade_ok:
-            log.error(
-                "❌ TRADING NON AUTORISÉ !\n"
-                "  → Le compte ou le terminal bloque le trading"
-            )
-            return False
+            log.warning("Vérifiez que 'Algo Trading' est VERT dans MT5")
         else:
-            log.info("Algo Trading actif ✅ | Trading autorisé ✅")
-            return True
+            log.info("Algo Trading actif")
+        return True
 
     def disconnect(self):
         mt5.shutdown()
