@@ -773,29 +773,50 @@ jobs:
 
           Write-Host "MT5 trouv\u00e9: $mt5Exe"
 
+          # Lancer MT5 avec auto-login si pas déjà lancé
           $mt5Process = Get-Process -Name "terminal64" -EA SilentlyContinue
           if (-not $mt5Process) {
-            Write-Host "D\u00e9marrage de MT5..."
+            Write-Host "Demarrage de MT5 avec auto-login..."
             $mt5Dir = Split-Path $mt5Exe
-            Start-Process -FilePath $mt5Exe -WorkingDirectory $mt5Dir
-            Start-Sleep -Seconds 15
-            Write-Host "MT5 d\u00e9marr\u00e9"
+            Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
+            Start-Sleep -Seconds 20
+            Write-Host "MT5 demarre"
           } else {
             Write-Host "MT5 deja en cours d'execution"
           }
 
-          Write-Host "D\u00e9marrage du bot en arri\u00e8re-plan..."
-          Start-Process -FilePath "python" -ArgumentList "telegram_listener_v4.py" -WorkingDirectory $botDir -RedirectStandardOutput "$botDir\bot_stdout.log" -RedirectStandardError "$botDir\bot_stderr.log" -NoNewWindow
-          Start-Sleep -Seconds 5
-          if (Test-Path "$botDir\bot_stdout.log") {
-            $size = (Get-Item "$botDir\bot_stdout.log").Length
-            Write-Host "Bot d\u00e9marr\u00e9 [OK] \u2014 log: $size bytes"
+          # Wrapper avec auto-restart en cas de crash
+          $wrapperScript = @'
+          $botDir = "C:\TradingBot"
+          $maxRestarts = 10
+          $restartCount = 0
+          while ($restartCount -lt $maxRestarts) {
+              Write-Host "=== Demarrage bot (tentative $($restartCount + 1)/$maxRestarts) ==="
+              python "$botDir\telegram_listener_v4.py" 2>&1
+              $exitCode = $LASTEXITCODE
+              Write-Host "Bot arrete avec code: $exitCode"
+              if ($exitCode -eq 0) { break }
+              $restartCount++
+              if ($restartCount -lt $maxRestarts) {
+                  Write-Host "Redemarrage dans 30s..."
+                  Start-Sleep -Seconds 30
+              }
           }
-          if (Test-Path "$botDir\bot_stderr.log") {
-            $errSize = (Get-Item "$botDir\bot_stderr.log").Length
+          '@
+          $wrapperScript | Set-Content "C:\TradingBot\start_bot.ps1" -Encoding UTF8
+
+          Write-Host "Demarrage du bot avec wrapper auto-retry..."
+          Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File C:\TradingBot\start_bot.ps1" -WorkingDirectory "C:\TradingBot" -RedirectStandardOutput "C:\TradingBot\bot_stdout.log" -RedirectStandardError "C:\TradingBot\bot_stderr.log" -NoNewWindow
+          Start-Sleep -Seconds 10
+          if (Test-Path "C:\TradingBot\bot_stdout.log") {
+            $size = (Get-Item "C:\TradingBot\bot_stdout.log").Length
+            Write-Host "Bot demarre [OK] - log: $size bytes"
+          }
+          if (Test-Path "C:\TradingBot\bot_stderr.log") {
+            $errSize = (Get-Item "C:\TradingBot\bot_stderr.log").Length
             if ($errSize -gt 0) {
-              Write-Host "ATTENTION \u2014 stderr ($errSize bytes):"
-              Get-Content "$botDir\bot_stderr.log" -Tail 20
+              Write-Host "ATTENTION - stderr ($errSize bytes):"
+              Get-Content "C:\TradingBot\bot_stderr.log" -Tail 20
             }
           }
 
