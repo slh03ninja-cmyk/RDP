@@ -394,16 +394,53 @@ jobs:
           Start-Process -FilePath $rdExe -EA SilentlyContinue
           Start-Sleep -Seconds 5
 
-      # ── MT5 Exness (téléchargement sur Bureau, install manuelle) ──
-      - name: Download MT5 Exness
+      # ── MT5 Exness (depuis GitHub Releases) ──
+      - name: Download + Install MT5 Exness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOT_REPO: ${{ inputs.bot_repo }}
         run: |
-          $mt5Url = "https://download.terminal.free/cdn/web/exness.technologies.ltd/mt5/exness5setup.exe"
-          $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
-          $dest = "$desktop\exness5setup.exe"
-          Write-Host "Téléchargement MT5 Exness sur le Bureau..."
-          Invoke-WebRequest -Uri $mt5Url -OutFile $dest -TimeoutSec 120 -ErrorAction Stop
-          $size = [math]::Round((Get-Item $dest).Length / 1MB, 1)
-          Write-Host "MT5 téléchargé: $dest ($size MB) [OK]"
+          try {
+            $zipPath = "$env:TEMP\MT5_Exness.zip"
+            $url     = "https://github.com/$env:BOT_REPO/releases/download/v1.0/MT5_Exness.zip"
+            $headers = @{ Authorization = "Bearer $env:GH_TOKEN" }
+
+            Write-Host "Telechargement MT5 depuis GitHub Releases..."
+            Invoke-WebRequest -Uri $url -OutFile $zipPath -Headers $headers -TimeoutSec 300
+            $size = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+            Write-Host "Telecharge : $size MB"
+
+            Write-Host "Extraction vers C:\Program Files ..."
+            Expand-Archive -Path $zipPath -DestinationPath "C:\Program Files" -Force
+            Remove-Item $zipPath -Force
+            Write-Host "MT5 installe ✅"
+
+            # Raccourci Bureau vers terminal64.exe
+            $terminal = Get-ChildItem "C:\Program Files\MetaTrader 5 EXNESS" -Filter "terminal64.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($terminal) {
+              $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+              $wsh = New-Object -ComObject WScript.Shell
+              $lnk = $wsh.CreateShortcut("$desktop\MetaTrader 5.lnk")
+              $lnk.TargetPath = $terminal.FullName
+              $lnk.Save()
+              Write-Host "Raccourci MT5 cree sur le Bureau ✅"
+            }
+          } catch {
+            Write-Host "MT5 install ignore : $($_.Exception.Message)"
+          }
+
+          # ── Télécharger l'installeur Exness sur le Bureau (toujours) ──
+          try {
+            $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+            $mt5Url  = "https://download.terminal.free/cdn/web/exness.technologies.ltd/mt5/exness5setup.exe"
+            $dest    = "$desktop\exness5setup.exe"
+            Write-Host "Telechargement installeur MT5 Exness sur le Bureau..."
+            Invoke-WebRequest -Uri $mt5Url -OutFile $dest -TimeoutSec 120 -ErrorAction Stop
+            $size = [math]::Round((Get-Item $dest).Length / 1MB, 1)
+            Write-Host "Installeur MT5 telecharge : $dest ($size MB) ✅"
+          } catch {
+            Write-Host "Installeur MT5 ignore : $($_.Exception.Message)"
+          }
 
       # ── Setup TradingBot V4 ──
       - name: Setup TradingBot V4
