@@ -284,17 +284,9 @@ jobs:
         run: |
           $u = $env:RDP_USER
           $p = $env:RDP_PASS
-          $sec = ConvertTo-SecureString $p -AsPlainText -Force
-          if (-not (Get-LocalUser -Name $u -EA SilentlyContinue)) {
-            New-LocalUser -Name $u -Password $sec -AccountNeverExpires
-            Add-LocalGroupMember -Group "Administrators" -Member $u
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
-          } else {
-            Set-LocalUser -Name $u -Password $sec -AccountNeverExpires
-            Enable-LocalUser -Name $u
-            Add-LocalGroupMember -Group "Administrators" -Member $u -EA SilentlyContinue
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -EA SilentlyContinue
-          }
+          net user $u $p /add 2>$null
+          net localgroup Administrators $u /add 2>$null
+          net localgroup "Remote Desktop Users" $u /add 2>$null
           Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
           Write-Host "RDP prêt. user=$u | ip=$env:TAILSCALE_IP"
