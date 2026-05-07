@@ -13,6 +13,14 @@ import sys
 import os
 import time
 
+# Fix encodage Windows (cp1252 → utf-8)
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def load_env(path=".env"):
     """Charge les variables depuis un fichier .env."""
     env = {}
