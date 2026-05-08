@@ -455,7 +455,7 @@ jobs:
             if (-not (Test-Path $configDir)) {
               New-Item -ItemType Directory -Path $configDir -Force | Out-Null
             }
-            "[Common]`nLogin=$env:MT5_LOGIN`nPassword=$env:MT5_PASSWORD`nServer=$env:MT5_SERVER`nAutoConfiguration=true`nEULAAccepted=true" | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
+            "[Common]`nLogin=$env:MT5_LOGIN`nPassword=$env:MT5_PASSWORD`nServer=$env:MT5_SERVER`nAutoConfiguration=true`nEULAAccepted=true`nAllowAlgoTrading=1`nAllowLiveTrading=1" | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
             Write-Host "common.ini dans $configDir ✅"
           }
 

@@ -594,26 +594,31 @@ class MT5Bridge:
         return self._check_algo()
 
     def _check_algo(self) -> bool:
+        """Vérifie que l'Algo Trading est activé dans le terminal MT5.
+        Retourne False si désactivé (ne pas trader !).
+        """
         terminal = mt5.terminal_info()
-        try:
-            algo_ok = bool(getattr(terminal, "trade_expert", True))
-        except Exception:
-            algo_ok = True
+        if terminal is None:
+            log.error("Impossible de récupérer les infos terminal MT5")
+            return False
+
+        # trade_expert = Algo Trading activé dans le terminal
+        algo_ok = getattr(terminal, "trade_expert", None)
+        if algo_ok is None:
+            # Attribut non disponible — on suppose OK mais on log
+            log.warning("trade_expert non disponible dans terminal_info — on suppose activé")
+            return True
 
         if not algo_ok:
-            log.warning("Algo Trading désactivé — tentative d'activation...")
-            try:
-                # Activer AutoTrading programmatiquement
-                mt5.terminal_info()  # refresh
-                import subprocess, time
-                # Envoyer F7 ou passer par les settings MT5
-                log.warning(
-                    "Activez manuellement 'Algo Trading' (bouton vert) dans MT5"
-                )
-            except Exception:
-                pass
-        else:
-            log.info("Algo Trading actif ✅")
+            log.error(
+                "❌ Algo Trading DÉSACTIVÉ dans MT5 !\n"
+                "   → Cliquez sur le bouton vert 'Algo Trading' dans la barre d'outils MT5\n"
+                "   → Ou : Outils → Options → Conseillers experts → Autoriser le trading automatisé\n"
+                "   → Le bot NE TRADERA PAS tant que c'est désactivé."
+            )
+            return False
+
+        log.info("Algo Trading actif ✅")
         return True
 
     def disconnect(self):
