@@ -456,19 +456,20 @@ jobs:
             if (-not (Test-Path $configDir)) {
               New-Item -ItemType Directory -Path $configDir -Force | Out-Null
             }
-            $commonIni = @"
-[Common]
-Login=$env:MT5_LOGIN
-Password=$env:MT5_PASSWORD
-Server=$env:MT5_SERVER
-AutoConfiguration=true
-EULAAccepted=true
-
-[Experts]
-AllowAlgoTrading=1
-AllowLiveTrading=1
-Enabled=1
-"@
+            $iniLines = @(
+              '[Common]',
+              "Login=$env:MT5_LOGIN",
+              "Password=$env:MT5_PASSWORD",
+              "Server=$env:MT5_SERVER",
+              'AutoConfiguration=true',
+              'EULAAccepted=true',
+              '',
+              '[Experts]',
+              'AllowAlgoTrading=1',
+              'AllowLiveTrading=1',
+              'Enabled=1'
+            )
+            $commonIni = $iniLines -join "`n"
             $commonIni | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
             Write-Host "common.ini dans $configDir ✅"
           }
@@ -490,14 +491,15 @@ Enabled=1
             Write-Host "terminal.ini mis à jour ✅"
           } else {
             Write-Host "terminal.ini non trouvé — création..."
-            $termIni = @"
-[Experts]
-AllowAlgoTrading=1
-Enabled=1
-
-[Common]
-AllowAlgoTrading=1
-"@
+            $termLines = @(
+              '[Experts]',
+              'AllowAlgoTrading=1',
+              'Enabled=1',
+              '',
+              '[Common]',
+              'AllowAlgoTrading=1'
+            )
+            $termIni = $termLines -join "`n"
             $termIni | Set-Content -Path $terminalIniPath -Encoding UTF8
             Write-Host "terminal.ini créé ✅"
           }
