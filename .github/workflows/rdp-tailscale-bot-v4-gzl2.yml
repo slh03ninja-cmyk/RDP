@@ -616,6 +616,13 @@ jobs:
           }
 
           # 2) Attendre que MT5 ait le trading autorisé (retry 90s)
+          # S'assurer que le dossier existe
+          $botDir = "C:\TradingBot"
+          if (-not (Test-Path $botDir)) {
+            New-Item -ItemType Directory -Path $botDir | Out-Null
+            Write-Host "Dossier C:\TradingBot créé"
+          }
+
           Write-Host "Attente activation trading (max 90s)..."
           $pyLines = @(
             'import MetaTrader5 as mt5, sys, time',
