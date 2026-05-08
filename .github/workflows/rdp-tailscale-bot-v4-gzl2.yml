@@ -582,48 +582,64 @@ jobs:
           Write-Host "MT5 après redémarrage ✅"
 
           # ═══════════════════════════════════════════════════
-          # FIX ÉTAPE E : Forcer Algo Trading via registre + attendre
+          # ═══════════════════════════════════════════════════
+          # FIX ÉTAPE E : Activer Algo Trading via PyAutoGUI
+          # Le bouton vert ne peut pas être activé par config/registre.
+          # On automatise le même geste que l'activation manuelle.
           # ═══════════════════════════════════════════════════
 
-          # 1) Forcer AllowAlgoTrading dans le registre Windows
-          Write-Host "Configuration registre MT5 pour Algo Trading..."
-          $regPaths = @(
-            "HKCU\Software\MetaQuotes\Terminal\Common",
-            "HKCU\Software\MetaQuotes\Terminal\Experts"
-          )
-          foreach ($rp in $regPaths) {
-            try {
-              New-Item -Path "Registry::$rp" -Force -EA SilentlyContinue | Out-Null
-              Set-ItemProperty -Path "Registry::$rp" -Name "AllowAlgoTrading" -Value 1 -EA SilentlyContinue
-              Write-Host "  Registre $rp -> AllowAlgoTrading=1"
-            } catch {
-              Write-Host "  Registre $rp ignoré"
-            }
-          }
-          # Aussi pour le profil utilisateur MetaQuotes
-          $mqReg = "HKCU\Software\MetaQuotes"
-          try {
-            $subkeys = Get-ChildItem "Registry::$mqReg" -EA SilentlyContinue
-            foreach ($sk in $subkeys) {
-              $expertsPath = "$($sk.PSPath)\Experts"
-              New-Item -Path $expertsPath -Force -EA SilentlyContinue | Out-Null
-              Set-ItemProperty -Path $expertsPath -Name "AllowAlgoTrading" -Value 1 -EA SilentlyContinue
-              Set-ItemProperty -Path $expertsPath -Name "Enabled" -Value 1 -EA SilentlyContinue
-              Write-Host "  Registre $($sk.Name)\\Experts -> AllowAlgoTrading=1"
-            }
-          } catch {
-            Write-Host "  Registre MetaQuotes ignoré"
-          }
+          # 1) Installer pyautogui + dépendances
+          Write-Host "Installation de PyAutoGUI..."
+          python -m pip install pyautogui pygetwindow psutil -q
 
-          # 2) Attendre que MT5 ait le trading autorisé (retry 90s)
-          # S'assurer que le dossier existe
+          # 2) S'assurer que le dossier bot existe
           $botDir = "C:\TradingBot"
           if (-not (Test-Path $botDir)) {
             New-Item -ItemType Directory -Path $botDir | Out-Null
             Write-Host "Dossier C:\TradingBot créé"
           }
 
-          Write-Host "Attente activation trading (max 90s)..."
+          # 3) Télécharger activate_algo.py depuis le repo
+          $repo = $env:BOT_REPO
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github.v3.raw"
+          }
+          try {
+            $activateUrl = "https://api.github.com/repos/$repo/contents/activate_algo.py"
+            Invoke-WebRequest -Uri $activateUrl -OutFile "$botDir\activate_algo.py" -Headers $headers -ErrorAction Stop
+            Write-Host "activate_algo.py téléchargé ✅"
+          } catch {
+            Write-Warning "activate_algo.py non trouvé dans le repo"
+          }
+
+          # 4) S'assurer que MT5 est lancé
+          $mt5Exe = $env:MT5_PATH
+          if (-not $mt5Exe -or -not (Test-Path $mt5Exe)) {
+            $mt5Exe = "C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe"
+          }
+          $mt5Process = Get-Process -Name "terminal64" -EA SilentlyContinue
+          if (-not $mt5Process -and (Test-Path $mt5Exe)) {
+            Write-Host "MT5 pas en cours — relance..."
+            $mt5Dir = Split-Path $mt5Exe
+            Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
+            Start-Sleep -Seconds 30
+          }
+
+          # 5) Activer Algo Trading via PyAutoGUI
+          if (Test-Path "$botDir\activate_algo.py") {
+            Write-Host "=== ACTIVATION ALGO TRADING VIA PYAUTOGUI ==="
+            python "$botDir\activate_algo.py" --mt5-path $mt5Exe --login $env:MT5_LOGIN --password $env:MT5_PASSWORD --server $env:MT5_SERVER --max-attempts 3
+            $activateExit = $LASTEXITCODE
+            if ($activateExit -eq 0) {
+              Write-Host "✅ Algo Trading activé avec succès via PyAutoGUI"
+            } else {
+              Write-Warning "⚠️ PyAutoGUI n'a pas pu activer Algo Trading"
+            }
+          }
+
+          # 6) Diagnostic final (vérification API)
+          Write-Host "=== DIAGNOSTIC FINAL ==="
           $pyLines = @(
             'import MetaTrader5 as mt5, sys, time',
             'if sys.platform == "win32":',
@@ -631,7 +647,7 @@ jobs:
             '    except: pass',
             'if not mt5.initialize():',
             '    print(f"MT5 init failed: {mt5.last_error()}"); sys.exit(1)',
-            'for i in range(9):',
+            'for i in range(6):',
             '    t = mt5.terminal_info()',
             '    a = mt5.account_info()',
             '    if t and a:',
@@ -644,33 +660,21 @@ jobs:
             '            mt5.shutdown()',
             '            sys.exit(0)',
             '    time.sleep(10)',
-            'print("ALGO_FAIL - trading toujours desactive apres 90s")',
+            'print("ALGO_FAIL")',
             'mt5.shutdown()',
             'sys.exit(1)'
           )
           $diagScript = $pyLines -join "`n"
-          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
-          python "C:\TradingBot\diag_algo.py"
+          $diagScript | Set-Content "C:\TradingBot\diag_final.py" -Encoding UTF8 -Force
+          python "C:\TradingBot\diag_final.py"
           $diagExit = $LASTEXITCODE
-          Remove-Item "C:\TradingBot\diag_algo.py" -Force -EA SilentlyContinue
+          Remove-Item "C:\TradingBot\diag_final.py" -Force -EA SilentlyContinue
           if ($diagExit -ne 0) {
-            Write-Warning "Algo Trading toujours désactivé — le bot va quand même démarrer (retry dans le code)"
+            Write-Warning "⚠️ Algo Trading toujours désactivé — le bot va démarrer en mode retry"
+          } else {
+            Write-Host "✅ Algo Trading confirmé par l'API — prêt à trader !"
           }
 
-          # ── Aussi t\u00e9l\u00e9charger l'installeur sur le Bureau (fallback) ──
-          try {
-            $desktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
-            $mt5Url  = "https://download.terminal.free/cdn/web/exness.technologies.ltd/mt5/exness5setup.exe"
-            $dest    = "$desktop\exness5setup.exe"
-            Invoke-WebRequest -Uri $mt5Url -OutFile $dest -TimeoutSec 120 -ErrorAction Stop
-            Write-Host "Installeur Exness Bureau \u2705"
-          } catch {
-            Write-Host "Installeur ignor\u00e9"
-          }
-
-      # ══════════════════════════════════════════════════════════
-      # ── V\u00e9rifier connexion MT5 AVANT de lancer le bot (FIX)
-      # ══════════════════════════════════════════════════════════
       - name: Verify MT5 connection
         if: false  # TEMP: bloqué pour debug
         env:

@@ -567,8 +567,12 @@ class SignalParser:
 class MT5Bridge:
 
     _sym_cache: dict = {}
+    algo_trading_active: bool = False  # Flag: peut-on trader ?
 
-    def connect(self) -> bool:
+    def connect(self, max_algo_retries: int = 10, retry_delay: float = 15.0) -> bool:
+        """Connecte à MT5 et vérifie l'Algo Trading avec retry.
+        Au lieu de crasher immédiatement, réessaie plusieurs fois
+        (le temps que PyAutoGUI active le bouton vert)."""
         if mt5.initialize():
             info = mt5.account_info()
             if info and info.login > 0:
@@ -576,7 +580,22 @@ class MT5Bridge:
                     f"MT5 déjà connecté → {info.name} | "
                     f"Balance: {info.balance} {info.currency}"
                 )
-                return self._check_algo()
+                # Retry _check_algo au cas où PyAutoGUI n'a pas encore activé
+                for attempt in range(1, max_algo_retries + 1):
+                    if self._check_algo():
+                        return True
+                    if attempt < max_algo_retries:
+                        log.warning(
+                            f"Algo Trading non actif — retry {attempt}/{max_algo_retries} "
+                            f"dans {retry_delay}s..."
+                        )
+                        time.sleep(retry_delay)
+                    else:
+                        log.error(
+                            "Algo Trading toujours désactivé après tous les retries.\n"
+                            "Le bot démarre en MODE OBSERVATION (pas de trades)."
+                        )
+                        return True  # On démarre quand même, en observation
         mt5.shutdown()
 
         if not mt5.initialize(
@@ -591,7 +610,22 @@ class MT5Bridge:
             f"MT5 connecté → {info.name} | "
             f"Balance: {info.balance} {info.currency}"
         )
-        return self._check_algo()
+        # Retry _check_algo
+        for attempt in range(1, max_algo_retries + 1):
+            if self._check_algo():
+                return True
+            if attempt < max_algo_retries:
+                log.warning(
+                    f"Algo Trading non actif — retry {attempt}/{max_algo_retries} "
+                    f"dans {retry_delay}s..."
+                )
+                time.sleep(retry_delay)
+            else:
+                log.error(
+                    "Algo Trading toujours désactivé après tous les retries.\n"
+                    "Le bot démarre en MODE OBSERVATION (pas de trades)."
+                )
+                return True  # On démarre quand même, en observation
 
     def _check_algo(self) -> bool:
         """Vérifie que l'Algo Trading est activé dans MT5.
@@ -645,6 +679,7 @@ class MT5Bridge:
             f"trade_expert={trade_expert} | "
             f"tradeapi_disabled={tradeapi_disabled}"
         )
+        self.algo_trading_active = True
         return True
 
     def disconnect(self):
@@ -1038,6 +1073,14 @@ def check_conflict(signal: dict, bridge: MT5Bridge, manager) -> bool:
 
 
 def execute_signal(signal: dict, bridge: MT5Bridge, manager, tracker):
+    # Vérifier si l'Algo Trading est actif
+    if not bridge.algo_trading_active:
+        log.warning(
+            f"[OBSERVATION] Signal reçu mais Algo Trading désactivé — "
+            f"signal ignoré: {signal['action']} {signal['symbol']}"
+        )
+        return
+
     action = signal["action"]
     symbol = signal["symbol"]
     zone_low = signal["zone_low"]
@@ -2004,8 +2047,10 @@ async def main():
 
     # Banner
     mode = "🧪 DEMO" if DEMO_MODE else "💰 LIVE"
+    algo_status = "✅ ACTIF" if bridge.algo_trading_active else "❌ DÉSACTIVÉ (observation)"
     log.info("=" * 55)
     log.info(f" TRADINGBOT V4.1 — {mode}")
+    log.info(f" Algo Trading : {algo_status}")
     log.info(f" Canaux surveillés : {len(chats)}")
     for env_name, ch_value in channel_names:
         if ch_value:
