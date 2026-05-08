@@ -568,6 +568,55 @@ jobs:
           Write-Host "MT5 apr\u00e8s attente suppl\u00e9mentaire (10s) \u2705"
 
           # ════════════════════════════════════════════════════════
+          # FIX ÉTAPE D2 : Écrire common.ini dans le dossier hash MT5
+          # MT5 crée son propre common.ini au premier lancement dans
+          # AppData\Roaming\MetaQuotes\Terminal\<HASH>\config\
+          # Ce fichier n'a PAS AllowAlgoTrading=1 — on l'écrit ici.
+          # ════════════════════════════════════════════════════════
+          Write-Host "=== ÉTAPE D2 : Forcer AllowAlgoTrading dans le dossier hash ==="
+          $appDataTerminal = "$env:APPDATA\MetaQuotes\Terminal"
+          $hashDirs = Get-ChildItem $appDataTerminal -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'Common' -and $_.Name -match '^[0-9A-F]{32}$' }
+          foreach ($hdir in $hashDirs) {
+              $cfgDir = Join-Path $hdir.FullName "config"
+              if (-not (Test-Path $cfgDir)) {
+                  New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
+              }
+              # ── common.ini ──
+              $commonPath = Join-Path $cfgDir "common.ini"
+              $iniLines = @(
+                  '[Common]',
+                  "Login=$env:MT5_LOGIN",
+                  "Password=$env:MT5_PASSWORD",
+                  "Server=$env:MT5_SERVER",
+                  'AutoConfiguration=true',
+                  'EULAAccepted=true',
+                  '',
+                  '[Experts]',
+                  'AllowAlgoTrading=1',
+                  'AllowLiveTrading=1',
+                  'Enabled=1'
+              )
+              $iniLines -join "`n" | Set-Content -Path $commonPath -Encoding UTF8
+              Write-Host "commonini \u00e9crit dans $($hdir.Name)\u2705"
+
+              # ── terminal.ini ──
+              $termPath = Join-Path $cfgDir "terminal.ini"
+              if (Test-Path $termPath) {
+                  $tc = Get-Content $termPath -Raw -Encoding UTF8
+                  if ($tc -match '\[Experts\]') {
+                      $tc = $tc -replace 'AllowAlgoTrading\s*=\s*\d+', 'AllowAlgoTrading=1'
+                      if ($tc -notmatch 'Enabled\s*=\s*\d') {
+                          $tc = $tc -replace '(\[Experts\])', "`$1`nEnabled=1"
+                      }
+                  } else {
+                      $tc += "`n[Experts]`nAllowAlgoTrading=1`nEnabled=1"
+                  }
+                  $tc | Set-Content -Path $termPath -Encoding UTF8
+                  Write-Host "terminalini mis \u00e0 jour dans $($hdir.Name)\u2705"
+              }
+          }
+
+          # ════════════════════════════════════════════════════════
           # FIX ÉTAPE D : REDÉMARRER MT5 pour appliquer la config
           # Les fichiers de config sont écrits AVANT le lancement,
           # mais MT5 peut ne pas les charger au premier démarrage.
