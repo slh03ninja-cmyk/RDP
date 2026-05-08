@@ -685,10 +685,10 @@ jobs:
             'sys.exit(1)'
           )
           $diagScript = $pyLines -join "`n"
-          $diagScript | Set-Content "C:\TradingBot\diag_final.py" -Encoding UTF8 -Force
-          python "C:\TradingBot\diag_final.py"
+          $diagScript | Set-Content "$env:TEMP\diag_final.py" -Encoding UTF8 -Force
+          python "$env:TEMP\diag_final.py"
           $diagExit = $LASTEXITCODE
-          Remove-Item "C:\TradingBot\diag_final.py" -Force -EA SilentlyContinue
+          Remove-Item "$env:TEMP\diag_final.py" -Force -EA SilentlyContinue
           if ($diagExit -ne 0) {
             Write-Warning "⚠️ Algo Trading toujours désactivé — le bot va démarrer en mode retry"
           } else {
