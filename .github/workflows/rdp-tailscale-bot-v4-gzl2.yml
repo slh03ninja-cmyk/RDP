@@ -446,7 +446,8 @@ jobs:
           # FIX \u00c9TAPE A : Pr\u00e9-configurer MT5 AVANT le premier lancement
           # ════════════════════════════════════════════════════════
 
-          # 3) Créer common.ini dans AppData\Roaming + dossier install
+          # 3) Configurer common.ini ET terminal.ini AVANT le lancement
+          # ── common.ini (credentials + sections correctes) ──
           $configDirs = @(
             "$mt5Dir\config",
             "$env:APPDATA\MetaQuotes\Terminal\Common\config"
@@ -455,8 +456,69 @@ jobs:
             if (-not (Test-Path $configDir)) {
               New-Item -ItemType Directory -Path $configDir -Force | Out-Null
             }
-            "[Common]`nLogin=$env:MT5_LOGIN`nPassword=$env:MT5_PASSWORD`nServer=$env:MT5_SERVER`nAutoConfiguration=true`nEULAAccepted=true`nAllowAlgoTrading=1`nAllowLiveTrading=1" | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
+            $commonIni = @"
+[Common]
+Login=$env:MT5_LOGIN
+Password=$env:MT5_PASSWORD
+Server=$env:MT5_SERVER
+AutoConfiguration=true
+EULAAccepted=true
+
+[Experts]
+AllowAlgoTrading=1
+AllowLiveTrading=1
+Enabled=1
+"@
+            $commonIni | Set-Content -Path "$configDir\common.ini" -Encoding UTF8
             Write-Host "common.ini dans $configDir ✅"
+          }
+
+          # ── terminal.ini (AllowAlgoTrading dans le terminal) ──
+          $terminalIniPath = "$mt5Dir\config\terminal.ini"
+          if (Test-Path $terminalIniPath) {
+            Write-Host "terminal.ini existant trouvé — mise à jour..."
+            $content = Get-Content $terminalIniPath -Raw -Encoding UTF8
+            if ($content -match '\[Experts\]') {
+              $content = $content -replace 'AllowAlgoTrading\s*=\s*\d+', 'AllowAlgoTrading=1'
+              if ($content -notmatch 'Enabled\s*=\s*\d') {
+                $content = $content -replace '(\[Experts\])', "`$1`nEnabled=1"
+              }
+            } else {
+              $content += "`n[Experts]`nAllowAlgoTrading=1`nEnabled=1"
+            }
+            $content | Set-Content -Path $terminalIniPath -Encoding UTF8
+            Write-Host "terminal.ini mis à jour ✅"
+          } else {
+            Write-Host "terminal.ini non trouvé — création..."
+            $termIni = @"
+[Experts]
+AllowAlgoTrading=1
+Enabled=1
+
+[Common]
+AllowAlgoTrading=1
+"@
+            $termIni | Set-Content -Path $terminalIniPath -Encoding UTF8
+            Write-Host "terminal.ini créé ✅"
+          }
+
+          # ── Aussi dans le dossier AppData du terminal ──
+          $appDataTerminal = "$env:APPDATA\MetaQuotes\Terminal"
+          if (Test-Path $appDataTerminal) {
+            $terminals = Get-ChildItem $appDataTerminal -Directory -ErrorAction SilentlyContinue
+            foreach ($tdir in $terminals) {
+              $tIni = Join-Path $tdir.FullName "config\terminal.ini"
+              if (Test-Path $tIni) {
+                $tc = Get-Content $tIni -Raw -Encoding UTF8
+                if ($tc -match '\[Experts\]') {
+                  $tc = $tc -replace 'AllowAlgoTrading\s*=\s*\d+', 'AllowAlgoTrading=1'
+                } else {
+                  $tc += "`n[Experts]`nAllowAlgoTrading=1`nEnabled=1"
+                }
+                $tc | Set-Content -Path $tIni -Encoding UTF8
+                Write-Host "terminal.ini AppData mis à jour : $tIni ✅"
+              }
+            }
           }
 
           # 4) Raccourci Bureau
@@ -502,6 +564,51 @@ jobs:
           }
           Start-Sleep -Seconds 10
           Write-Host "MT5 apr\u00e8s attente suppl\u00e9mentaire (10s) \u2705"
+
+          # ════════════════════════════════════════════════════════
+          # FIX ÉTAPE D : REDÉMARRER MT5 pour appliquer la config
+          # Les fichiers de config sont écrits AVANT le lancement,
+          # mais MT5 peut ne pas les charger au premier démarrage.
+          # On redémarre pour forcer la prise en compte de AllowAlgoTrading.
+          # ════════════════════════════════════════════════════════
+          Write-Host "Redémarrage de MT5 pour appliquer la config Algo Trading..."
+          Stop-Process -Name "terminal64" -Force -EA SilentlyContinue
+          Start-Sleep -Seconds 5
+          Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
+          Write-Host "MT5 redémarré — attente 30s..."
+          Start-Sleep -Seconds 30
+          Write-Host "MT5 après redémarrage ✅"
+
+          # ════════════════════════════════════════════════════════
+          # FIX ÉTAPE E : Diagnostic Algo Trading (vérification)
+          # ════════════════════════════════════════════════════════
+          Write-Host "Diagnostic Algo Trading..."
+          $diagScript = @'
+          import MetaTrader5 as mt5, sys
+          if sys.platform == "win32":
+              try: sys.stdout.reconfigure(encoding="utf-8")
+              except: pass
+          if not mt5.initialize():
+              print(f"MT5 init failed: {mt5.last_error()}"); sys.exit(1)
+          t = mt5.terminal_info()
+          a = mt5.account_info()
+          if t and a:
+              ta = getattr(t, "trade_allowed", None)
+              td = getattr(t, "tradeapi_disabled", None)
+              te = getattr(a, "trade_expert", None)
+              print(f"trade_allowed={ta} | tradeapi_disabled={td} | trade_expert={te}")
+              if ta and te and not td:
+                  print("ALGO_OK")
+              else:
+                  print("ALGO_FAIL")
+                  if not ta: print("  → terminal.trade_allowed=False")
+                  if td: print("  → terminal.tradeapi_disabled=True")
+                  if not te: print("  → account.trade_expert=False (broker bloque)")
+          mt5.shutdown()
+          '@
+          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
+          python "C:\TradingBot\diag_algo.py"
+          Remove-Item "C:\TradingBot\diag_algo.py" -Force -EA SilentlyContinue
 
           # ── Aussi t\u00e9l\u00e9charger l'installeur sur le Bureau (fallback) ──
           try {
