@@ -420,7 +420,7 @@ jobs:
           }
 
           Write-Host "Installation silencieuse de MT5 Exness..."
-          Start-Process -FilePath $setupExe -ArgumentList "/silent" -Wait -NoNewWindow
+          Start-Process -FilePath $setupExe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -NoNewWindow
           Start-Sleep -Seconds 10
           Remove-Item $setupExe -Force -EA SilentlyContinue
           Write-Host "MT5 Exness install\u00e9 \u2705"
