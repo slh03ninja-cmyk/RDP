@@ -594,31 +594,57 @@ class MT5Bridge:
         return self._check_algo()
 
     def _check_algo(self) -> bool:
-        """Vérifie que l'Algo Trading est activé dans le terminal MT5.
+        """Vérifie que l'Algo Trading est activé dans MT5.
+        Vérifie terminal_info().trade_allowed ET account_info().trade_expert.
         Retourne False si désactivé (ne pas trader !).
         """
+        # 1) Vérifier le terminal
         terminal = mt5.terminal_info()
         if terminal is None:
             log.error("Impossible de récupérer les infos terminal MT5")
             return False
 
-        # trade_expert = Algo Trading activé dans le terminal
-        algo_ok = getattr(terminal, "trade_expert", None)
-        if algo_ok is None:
-            # Attribut non disponible — on suppose OK mais on log
-            log.warning("trade_expert non disponible dans terminal_info — on suppose activé")
-            return True
+        trade_allowed = getattr(terminal, "trade_allowed", None)
+        tradeapi_disabled = getattr(terminal, "tradeapi_disabled", None)
 
-        if not algo_ok:
+        if trade_allowed is False:
             log.error(
-                "❌ Algo Trading DÉSACTIVÉ dans MT5 !\n"
-                "   → Cliquez sur le bouton vert 'Algo Trading' dans la barre d'outils MT5\n"
+                "❌ Trading INTERDIT dans le terminal (trade_allowed=False)\n"
+                "   → Vérifiez que le terminal est connecté au broker"
+            )
+            return False
+
+        if tradeapi_disabled is True:
+            log.error(
+                "❌ Trade API DÉSACTIVÉ dans le terminal (tradeapi_disabled=True)\n"
+                "   → Outils → Options → Conseillers experts → Autoriser le trading automatisé"
+            )
+            return False
+
+        # 2) Vérifier le compte (trade_expert = Algo Trading côté broker)
+        account = mt5.account_info()
+        if account is None:
+            log.error("Impossible de récupérer les infos compte MT5")
+            return False
+
+        trade_expert = getattr(account, "trade_expert", None)
+
+        if trade_expert is False:
+            log.error(
+                "❌ Algo Trading DÉSACTIVÉ par le broker (account trade_expert=False)\n"
+                "   → Le bouton vert 'Algo Trading' dans MT5 doit être activé\n"
                 "   → Ou : Outils → Options → Conseillers experts → Autoriser le trading automatisé\n"
+                "   → Si le problème persiste, contactez Exness — le broker peut bloquer l'algo trading\n"
                 "   → Le bot NE TRADERA PAS tant que c'est désactivé."
             )
             return False
 
-        log.info("Algo Trading actif ✅")
+        log.info(
+            f"Algo Trading actif ✅ | "
+            f"trade_allowed={trade_allowed} | "
+            f"trade_expert={trade_expert} | "
+            f"tradeapi_disabled={tradeapi_disabled}"
+        )
         return True
 
     def disconnect(self):
