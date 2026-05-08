@@ -648,7 +648,8 @@ jobs:
             'mt5.shutdown()',
             'sys.exit(1)'
           )
-          $diagScript = $pyLines -join "`n"          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
+          $diagScript = $pyLines -join "`n"
+          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
           python "C:\TradingBot\diag_algo.py"
           $diagExit = $LASTEXITCODE
           Remove-Item "C:\TradingBot\diag_algo.py" -Force -EA SilentlyContinue
