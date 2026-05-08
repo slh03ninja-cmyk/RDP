@@ -581,36 +581,73 @@ jobs:
           Start-Sleep -Seconds 30
           Write-Host "MT5 après redémarrage ✅"
 
-          # ════════════════════════════════════════════════════════
-          # FIX ÉTAPE E : Diagnostic Algo Trading (vérification)
-          # ════════════════════════════════════════════════════════
-          Write-Host "Diagnostic Algo Trading..."
-          $diagScript = @'
-          import MetaTrader5 as mt5, sys
-          if sys.platform == "win32":
-              try: sys.stdout.reconfigure(encoding="utf-8")
-              except: pass
-          if not mt5.initialize():
-              print(f"MT5 init failed: {mt5.last_error()}"); sys.exit(1)
-          t = mt5.terminal_info()
-          a = mt5.account_info()
-          if t and a:
-              ta = getattr(t, "trade_allowed", None)
-              td = getattr(t, "tradeapi_disabled", None)
-              te = getattr(a, "trade_expert", None)
-              print(f"trade_allowed={ta} | tradeapi_disabled={td} | trade_expert={te}")
-              if ta and te and not td:
-                  print("ALGO_OK")
-              else:
-                  print("ALGO_FAIL")
-                  if not ta: print("  → terminal.trade_allowed=False")
-                  if td: print("  → terminal.tradeapi_disabled=True")
-                  if not te: print("  → account.trade_expert=False (broker bloque)")
-          mt5.shutdown()
-          '@
-          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
+          # ═══════════════════════════════════════════════════
+          # FIX ÉTAPE E : Forcer Algo Trading via registre + attendre
+          # ═══════════════════════════════════════════════════
+
+          # 1) Forcer AllowAlgoTrading dans le registre Windows
+          Write-Host "Configuration registre MT5 pour Algo Trading..."
+          $regPaths = @(
+            "HKCU\Software\MetaQuotes\Terminal\Common",
+            "HKCU\Software\MetaQuotes\Terminal\Experts"
+          )
+          foreach ($rp in $regPaths) {
+            try {
+              New-Item -Path "Registry::$rp" -Force -EA SilentlyContinue | Out-Null
+              Set-ItemProperty -Path "Registry::$rp" -Name "AllowAlgoTrading" -Value 1 -EA SilentlyContinue
+              Write-Host "  Registre $rp -> AllowAlgoTrading=1"
+            } catch {
+              Write-Host "  Registre $rp ignoré"
+            }
+          }
+          # Aussi pour le profil utilisateur MetaQuotes
+          $mqReg = "HKCU\Software\MetaQuotes"
+          try {
+            $subkeys = Get-ChildItem "Registry::$mqReg" -EA SilentlyContinue
+            foreach ($sk in $subkeys) {
+              $expertsPath = "$($sk.PSPath)\Experts"
+              New-Item -Path $expertsPath -Force -EA SilentlyContinue | Out-Null
+              Set-ItemProperty -Path $expertsPath -Name "AllowAlgoTrading" -Value 1 -EA SilentlyContinue
+              Set-ItemProperty -Path $expertsPath -Name "Enabled" -Value 1 -EA SilentlyContinue
+              Write-Host "  Registre $($sk.Name)\\Experts -> AllowAlgoTrading=1"
+            }
+          } catch {
+            Write-Host "  Registre MetaQuotes ignoré"
+          }
+
+          # 2) Attendre que MT5 ait le trading autorisé (retry 90s)
+          Write-Host "Attente activation trading (max 90s)..."
+          $pyLines = @(
+            'import MetaTrader5 as mt5, sys, time',
+            'if sys.platform == "win32":',
+            '    try: sys.stdout.reconfigure(encoding="utf-8")',
+            '    except: pass',
+            'if not mt5.initialize():',
+            '    print(f"MT5 init failed: {mt5.last_error()}"); sys.exit(1)',
+            'for i in range(9):',
+            '    t = mt5.terminal_info()',
+            '    a = mt5.account_info()',
+            '    if t and a:',
+            '        ta = getattr(t, "trade_allowed", None)',
+            '        td = getattr(t, "tradeapi_disabled", None)',
+            '        te = getattr(a, "trade_expert", None)',
+            '        print(f"[{(i+1)*10}s] trade_allowed={ta} | tradeapi_disabled={td} | trade_expert={te}")',
+            '        if ta and te and not td:',
+            '            print("ALGO_OK")',
+            '            mt5.shutdown()',
+            '            sys.exit(0)',
+            '    time.sleep(10)',
+            'print("ALGO_FAIL - trading toujours desactive apres 90s")',
+            'mt5.shutdown()',
+            'sys.exit(1)'
+          )
+          $diagScript = $pyLines -join "`n"          $diagScript | Set-Content "C:\TradingBot\diag_algo.py" -Encoding UTF8 -Force
           python "C:\TradingBot\diag_algo.py"
+          $diagExit = $LASTEXITCODE
           Remove-Item "C:\TradingBot\diag_algo.py" -Force -EA SilentlyContinue
+          if ($diagExit -ne 0) {
+            Write-Warning "Algo Trading toujours désactivé — le bot va quand même démarrer (retry dans le code)"
+          }
 
           # ── Aussi t\u00e9l\u00e9charger l'installeur sur le Bureau (fallback) ──
           try {
