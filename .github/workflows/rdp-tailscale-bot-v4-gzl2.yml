@@ -676,7 +676,6 @@ jobs:
           }
 
       - name: Verify MT5 connection
-        if: false  # TEMP: bloqué pour debug
         env:
           MT5_LOGIN: ${{ inputs.mt5_login }}
           MT5_PASSWORD: ${{ inputs.mt5_password }}
@@ -743,7 +742,6 @@ jobs:
 
       # ── Setup TradingBot V4 ──
       - name: Setup TradingBot V4
-        if: false  # TEMP: bloqué pour debug
         env:
           GH_TOKEN: ${{ github.token }}
           BOT_REPO: ${{ inputs.bot_repo }}
