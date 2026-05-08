@@ -583,6 +583,35 @@ jobs:
 
           # ═══════════════════════════════════════════════════
           # ═══════════════════════════════════════════════════
+          # ÉTAPE E0 : Diagnostic des chemins MT5
+          # ═══════════════════════════════════════════════════
+          Write-Host "=== DIAGNOSTIC CHEMINS MT5 ==="
+          $mt5Dirs = @(
+            "$mt5Dir\config",
+            "$env:APPDATA\MetaQuotes\Terminal",
+            "$env:APPDATA\MetaQuotes\Terminal\Common",
+            "$env:LOCALAPPDATA\MetaQuotes\Terminal"
+          )
+          foreach ($d in $mt5Dirs) {
+            if (Test-Path $d) {
+              Write-Host "  [EXISTS] $d"
+              Get-ChildItem $d -Recurse -Filter "*.ini" -ErrorAction SilentlyContinue | ForEach-Object {
+                Write-Host "    INI: $($_.FullName) ($($_.Length) bytes)"
+              }
+            } else {
+              Write-Host "  [MISSING] $d"
+            }
+          }
+          # Chercher TOUS les fichiers common.ini et terminal.ini
+          Write-Host "--- Recherche de TOUS les fichiers INI ---"
+          Get-ChildItem "C:\" -Recurse -Filter "common.ini" -ErrorAction SilentlyContinue -Depth 6 | ForEach-Object {
+            Write-Host "  common.ini: $($_.FullName)"
+          }
+          Get-ChildItem "C:\" -Recurse -Filter "terminal.ini" -ErrorAction SilentlyContinue -Depth 6 | ForEach-Object {
+            Write-Host "  terminal.ini: $($_.FullName)"
+          }
+
+          # ═══════════════════════════════════════════════════
           # FIX ÉTAPE E : Activer Algo Trading via PyAutoGUI
           # Le bouton vert ne peut pas être activé par config/registre.
           # On automatise le même geste que l'activation manuelle.
