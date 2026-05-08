@@ -610,64 +610,6 @@ jobs:
           Get-ChildItem "C:\" -Recurse -Filter "terminal.ini" -ErrorAction SilentlyContinue -Depth 6 | ForEach-Object {
             Write-Host "  terminal.ini: $($_.FullName)"
           }
-
-          # ═══════════════════════════════════════════════════
-          # FIX ÉTAPE E : Activer Algo Trading via PyAutoGUI
-          # Le bouton vert ne peut pas être activé par config/registre.
-          # On automatise le même geste que l'activation manuelle.
-          # ═══════════════════════════════════════════════════
-
-          # 1) Installer pyautogui + dépendances
-          Write-Host "Installation de PyAutoGUI..."
-          python -m pip install pyautogui pygetwindow psutil -q
-
-          # 2) S'assurer que le dossier bot existe
-          $botDir = "C:\TradingBot"
-          if (-not (Test-Path $botDir)) {
-            New-Item -ItemType Directory -Path $botDir | Out-Null
-            Write-Host "Dossier C:\TradingBot créé"
-          }
-
-          # 3) Télécharger activate_algo.py depuis le repo
-          $repo = $env:BOT_REPO
-          $headers = @{
-            Authorization = "Bearer $env:GH_TOKEN"
-            Accept = "application/vnd.github.v3.raw"
-          }
-          try {
-            $activateUrl = "https://api.github.com/repos/$repo/contents/activate_algo.py"
-            Invoke-WebRequest -Uri $activateUrl -OutFile "$botDir\activate_algo.py" -Headers $headers -ErrorAction Stop
-            Write-Host "activate_algo.py téléchargé ✅"
-          } catch {
-            Write-Warning "activate_algo.py non trouvé dans le repo"
-          }
-
-          # 4) S'assurer que MT5 est lancé
-          $mt5Exe = $env:MT5_PATH
-          if (-not $mt5Exe -or -not (Test-Path $mt5Exe)) {
-            $mt5Exe = "C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe"
-          }
-          $mt5Process = Get-Process -Name "terminal64" -EA SilentlyContinue
-          if (-not $mt5Process -and (Test-Path $mt5Exe)) {
-            Write-Host "MT5 pas en cours — relance..."
-            $mt5Dir = Split-Path $mt5Exe
-            Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
-            Start-Sleep -Seconds 30
-          }
-
-          # 5) Activer Algo Trading via PyAutoGUI
-          if (Test-Path "$botDir\activate_algo.py") {
-            Write-Host "=== ACTIVATION ALGO TRADING VIA PYAUTOGUI ==="
-            python "$botDir\activate_algo.py" --mt5-path $mt5Exe --login $env:MT5_LOGIN --password $env:MT5_PASSWORD --server $env:MT5_SERVER --max-attempts 3
-            $activateExit = $LASTEXITCODE
-            if ($activateExit -eq 0) {
-              Write-Host "✅ Algo Trading activé avec succès via PyAutoGUI"
-            } else {
-              Write-Warning "⚠️ PyAutoGUI n'a pas pu activer Algo Trading"
-            }
-          }
-
-          # 6) Diagnostic final (vérification API)
           Write-Host "=== DIAGNOSTIC FINAL ==="
           $pyLines = @(
             'import MetaTrader5 as mt5, sys, time',
