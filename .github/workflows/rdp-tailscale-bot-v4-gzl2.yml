@@ -626,8 +626,8 @@ jobs:
           Stop-Process -Name "terminal64" -Force -EA SilentlyContinue
           Start-Sleep -Seconds 5
           Start-Process -FilePath $mt5Exe -ArgumentList "/login:$env:MT5_LOGIN /password:$env:MT5_PASSWORD /server:$env:MT5_SERVER" -WorkingDirectory $mt5Dir
-          Write-Host "MT5 redémarré — attente 30s..."
-          Start-Sleep -Seconds 30
+          Write-Host "MT5 redémarré — attente 60s..."
+          Start-Sleep -Seconds 60
           Write-Host "MT5 après redémarrage ✅"
 
           # ═══════════════════════════════════════════════════
@@ -667,7 +667,7 @@ jobs:
             '    except: pass',
             'if not mt5.initialize():',
             '    print(f"MT5 init failed: {mt5.last_error()}"); sys.exit(1)',
-            'for i in range(6):',
+            'for i in range(10):',
             '    t = mt5.terminal_info()',
             '    a = mt5.account_info()',
             '    if t and a:',
