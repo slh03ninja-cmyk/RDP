@@ -421,18 +421,65 @@ jobs:
 
           Write-Host "Installation silencieuse de MT5..."
           $installer = Start-Process -FilePath $setupExe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -PassThru
-          # Timeout 5 min — si l'installateur bloque, on le tue
+
+          # Attendre que terminal64.exe apparaisse (l'installateur le crée)
           $timeout = 300
-          if (-not $installer.WaitForExit($timeout * 1000)) {
-            Write-Warning "Installateur MT5 bloqué après ${timeout}s — kill forcé"
-            $installer | Stop-Process -Force
+          $elapsed = 0
+          $mt5Installed = $false
+          while ($elapsed -lt $timeout) {
             Start-Sleep -Seconds 5
+            $elapsed += 5
+            # Chercher terminal64.exe dans les dossiers standards
+            $searchDirs = @(
+              "${Env:PROGRAMFILES}\MetaTrader 5",
+              "${Env:PROGRAMFILES(x86)}\MetaTrader 5",
+              "${Env:PROGRAMFILES}\MetaTrader 5 EXNESS"
+            )
+            foreach ($d in $searchDirs) {
+              $candidate = Join-Path $d "terminal64.exe"
+              if (Test-Path $candidate) {
+                Write-Host "MT5 trouv\u00e9 apr\u00e8s ${elapsed}s : $candidate"
+                $mt5Installed = $true
+                break
+              }
+            }
+            if ($mt5Installed) { break }
+            # Aussi v\u00e9rifier si l'installateur est termin\u00e9
+            if ($installer.HasExited) {
+              Write-Host "Installateur termin\u00e9 apr\u00e8s ${elapsed}s"
+              break
+            }
+            Write-Host "  Attente install... ${elapsed}s"
           }
-          # Tuer MT5 s'il s'est lancé automatiquement après l'install
+
+          # Tuer l'installateur s'il tourne encore
+          if (-not $installer.HasExited) {
+            Write-Warning "Installateur encore actif \u2014 kill forc\u00e9"
+            $installer | Stop-Process -Force
+            Start-Sleep -Seconds 3
+          }
+          # Tuer MT5 s'il s'est lanc\u00e9 automatiquement
           Stop-Process -Name "terminal64" -Force -EA SilentlyContinue
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 3
           Remove-Item $setupExe -Force -EA SilentlyContinue
-          Write-Host "MT5 installé ✅"
+
+          if (-not $mt5Installed) {
+            # Chercher plus largement
+            $found = Get-ChildItem "C:\" -Filter "terminal64.exe" -Recurse -Depth 5 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) {
+              Write-Host "MT5 trouv\u00e9 (recherche \u00e9largie) : $($found.FullName)"
+              $mt5Installed = $true
+            }
+          }
+
+          if (-not $mt5Installed) {
+            Write-Error "MT5 non trouv\u00e9 apr\u00e8s installation \u2014 impossible de continuer"
+            # Debug: lister ce qui a \u00e9t\u00e9 install\u00e9
+            Write-Host "=== DEBUG: Contenu Program Files ==="
+            Get-ChildItem "${Env:PROGRAMFILES}" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "Meta|Trading|MT" } | ForEach-Object { Write-Host "  $($_.FullName)" }
+            exit 1
+          }
+          Write-Host "MT5 install\u00e9 \u2705"
 
           # ── 2) Localiser terminal64.exe ──
           $mt5Exe = $null
