@@ -395,7 +395,7 @@ jobs:
       # ══════════════════════════════════════════════════════════
       # ── MT5 Exness (FIX: pre-config + auto-login + wait ready)
       # ══════════════════════════════════════════════════════════
-      - name: Download + Install MT5 Exness
+      - name: Download + Install MT5
         env:
           GH_TOKEN: ${{ github.token }}
           BOT_REPO: ${{ inputs.bot_repo }}
@@ -406,8 +406,8 @@ jobs:
           # ════════════════════════════════════════════════════════
           # 1) Installer MT5 Exness via l'installateur officiel
           # ════════════════════════════════════════════════════════
-          $mt5Url = "https://download.terminal.free/cdn/web/exness.technologies.ltd/mt5/exness5setup.exe"
-          $setupExe = "$env:TEMP\exness5setup.exe"
+          $mt5Url = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
+          $setupExe = "$env:TEMP\mt5setup.exe"
 
           Write-Host "T\u00e9l\u00e9chargement de l'installateur MT5 Exness..."
           try {
@@ -419,18 +419,27 @@ jobs:
             exit 1
           }
 
-          Write-Host "Installation silencieuse de MT5 Exness..."
-          Start-Process -FilePath $setupExe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -NoNewWindow
-          Start-Sleep -Seconds 10
+          Write-Host "Installation silencieuse de MT5..."
+          $installer = Start-Process -FilePath $setupExe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -PassThru
+          # Timeout 5 min — si l'installateur bloque, on le tue
+          $timeout = 300
+          if (-not $installer.WaitForExit($timeout * 1000)) {
+            Write-Warning "Installateur MT5 bloqué après ${timeout}s — kill forcé"
+            $installer | Stop-Process -Force
+            Start-Sleep -Seconds 5
+          }
+          # Tuer MT5 s'il s'est lancé automatiquement après l'install
+          Stop-Process -Name "terminal64" -Force -EA SilentlyContinue
+          Start-Sleep -Seconds 5
           Remove-Item $setupExe -Force -EA SilentlyContinue
-          Write-Host "MT5 Exness install\u00e9 \u2705"
+          Write-Host "MT5 installé ✅"
 
           # ── 2) Localiser terminal64.exe ──
           $mt5Exe = $null
           $searchPaths = @(
-            "${Env:PROGRAMFILES}\MetaTrader 5 EXNESS\terminal64.exe",
             "${Env:PROGRAMFILES}\MetaTrader 5\terminal64.exe",
-            "${Env:PROGRAMFILES(x86)}\MetaTrader 5\terminal64.exe"
+            "${Env:PROGRAMFILES(x86)}\MetaTrader 5\terminal64.exe",
+            "${Env:PROGRAMFILES}\MetaTrader 5 EXNESS\terminal64.exe"
           )
           foreach ($p in $searchPaths) {
             if (Test-Path $p) { $mt5Exe = $p; break }
